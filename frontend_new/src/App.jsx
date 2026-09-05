@@ -70,10 +70,12 @@ function DashboardLayout({ children }) {
         </div>
         <nav className="flex-1 p-4 space-y-2">
           <Link to="/dashboard" className="flex items-center gap-2 p-2 hover:bg-white/10 rounded"><LayoutDashboard size={20} /> Dashboard</Link>
+          <Link to="/transactions" className="flex items-center gap-2 p-2 hover:bg-white/10 rounded"><BookOpen size={20} /> Transactions</Link>
           <Link to="/contacts" className="flex items-center gap-2 p-2 hover:bg-white/10 rounded"><Users size={20} /> Contacts</Link>
           <Link to="/products" className="flex items-center gap-2 p-2 hover:bg-white/10 rounded"><Box size={20} /> Products</Link>
           <Link to="/accounts" className="flex items-center gap-2 p-2 hover:bg-white/10 rounded"><Wallet size={20} /> Chart of Accounts</Link>
           <Link to="/journals" className="flex items-center gap-2 p-2 hover:bg-white/10 rounded"><BookOpen size={20} /> Journals</Link>
+          <Link to="/accountants" className="flex items-center gap-2 p-2 hover:bg-white/10 rounded"><Users size={20} /> Accountants</Link>
         </nav>
       </div>
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -196,7 +198,16 @@ function GenericDataPage({ title, endpoint, columns, formFields, itemKey = 'id' 
                       className="w-full border rounded-md p-2 focus:ring-[#003B95] focus:border-[#003B95]"
                     >
                       <option value="">Select...</option>
-                      {field.options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                      {field.name === 'city' ? (
+                         (formData.state === 'Gujarat' ? [{value: 'Ahmedabad', label: 'Ahmedabad'}, {value: 'Surat', label: 'Surat'}] :
+                          formData.state === 'Maharashtra' ? [{value: 'Mumbai', label: 'Mumbai'}, {value: 'Pune', label: 'Pune'}] :
+                          formData.state === 'Karnataka' ? [{value: 'Bengaluru', label: 'Bengaluru'}] :
+                          formData.state === 'Delhi' ? [{value: 'New Delhi', label: 'New Delhi'}] :
+                          formData.state === 'West Bengal' ? [{value: 'Kolkata', label: 'Kolkata'}] :
+                          []).map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)
+                      ) : (
+                        field.options?.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)
+                      )}
                     </select>
                   ) : (
                     <input 
@@ -243,10 +254,15 @@ function App() {
               {name: 'type', label: 'Type', type: 'select', required: true, options: [{value: 'Customer', label: 'Customer'}, {value: 'Vendor', label: 'Vendor'}, {value: 'Both', label: 'Both'}]},
               {name: 'email', label: 'Email', type: 'email'},
               {name: 'phone', label: 'Mobile'},
-              {name: 'city', label: 'City'},
-              {name: 'state', label: 'State'},
-              {name: 'pincode', label: 'Pincode'},
-              {name: 'profile_image', label: 'Profile Image URL'}
+              {name: 'state', label: 'State', type: 'select', required: true, options: [
+                {value: 'Gujarat', label: 'Gujarat'},
+                {value: 'Maharashtra', label: 'Maharashtra'},
+                {value: 'Karnataka', label: 'Karnataka'},
+                {value: 'Delhi', label: 'Delhi'},
+                {value: 'West Bengal', label: 'West Bengal'}
+              ]},
+              {name: 'city', label: 'City', type: 'select', required: true},
+              {name: 'pincode', label: 'Pincode'}
             ]}
           />
         </ProtectedRoute>} />
@@ -256,10 +272,9 @@ function App() {
             title="Products" 
             endpoint="/products" 
             columns={[
-              {key: 'sku', label: 'SKU'}, {key: 'name', label: 'Product Name'}, {key: 'type', label: 'Type'}, {key: 'category', label: 'Category'}, {key: 'sales_price', label: 'Sales Price'}
+              {key: 'name', label: 'Product Name'}, {key: 'type', label: 'Type'}, {key: 'category', label: 'Category'}, {key: 'sales_price', label: 'Sales Price'}
             ]} 
             formFields={[
-              {name: 'sku', label: 'SKU', required: true},
               {name: 'name', label: 'Product Name', required: true},
               {name: 'type', label: 'Type', type: 'select', required: true, options: [{value: 'Goods', label: 'Goods'}, {value: 'Service', label: 'Service'}, {value: 'Combo', label: 'Combo'}]},
               {name: 'category', label: 'Category', required: true},
@@ -300,6 +315,31 @@ function App() {
                 {value: 'Sales', label: 'Sales'}, {value: 'Purchase', label: 'Purchase'}, {value: 'Cash', label: 'Cash'}, {value: 'Bank', label: 'Bank'}
               ]},
               {name: 'default_account_id', label: 'Default Account ID (Optional)', type: 'number'}
+            ]}
+          />
+        </ProtectedRoute>} />
+
+        <Route path="/transactions" element={<ProtectedRoute>
+          <GenericDataPage 
+            title="Journal Entries (Deals)" 
+            endpoint="/transactions" 
+            columns={[
+              {key: 'date', label: 'Date'}, {key: 'reference', label: 'Reference'}, {key: 'journal_name', label: 'Journal'}, {key: 'total_debit', label: 'Total Debit'}, {key: 'total_credit', label: 'Total Credit'}
+            ]} 
+          />
+        </ProtectedRoute>} />
+
+        <Route path="/accountants" element={<ProtectedRoute>
+          <GenericDataPage 
+            title="Accountants" 
+            endpoint="/users" 
+            columns={[
+              {key: 'name', label: 'Name'}, {key: 'email', label: 'Email'}, {key: 'role', label: 'Role'}
+            ]} 
+            formFields={[
+              {name: 'name', label: 'Accountant Name', required: true},
+              {name: 'email', label: 'Email', type: 'email', required: true},
+              {name: 'password', label: 'Password', type: 'password', required: true}
             ]}
           />
         </ProtectedRoute>} />

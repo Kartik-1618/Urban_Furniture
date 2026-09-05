@@ -32,7 +32,7 @@ async function initDB() {
 
   try {
     console.log("Dropping existing tables...");
-    await pool.query(`DROP TABLE IF EXISTS journals, accounts, products, contacts, users CASCADE;`);
+    await pool.query(`DROP TABLE IF EXISTS journal_items, journal_entries, journals, accounts, products, contacts, users CASCADE;`);
 
     console.log("Creating tables with new schema...");
     
@@ -45,6 +45,8 @@ async function initDB() {
         role VARCHAR(50) DEFAULT 'user'
       );
     `);
+
+    // Removed journal_entries and journal_items from here
 
     // Added city, state, pincode, profile_image
     await pool.query(`
@@ -61,11 +63,10 @@ async function initDB() {
       );
     `);
 
-    // Added category
+    // Added category, removed sku
     await pool.query(`
       CREATE TABLE products (
         id SERIAL PRIMARY KEY,
-        sku VARCHAR(100) UNIQUE,
         name VARCHAR(255) NOT NULL,
         category VARCHAR(100),
         type VARCHAR(50) NOT NULL,
@@ -95,12 +96,31 @@ async function initDB() {
       );
     `);
 
+    await pool.query(`
+      CREATE TABLE journal_entries (
+        id SERIAL PRIMARY KEY,
+        date DATE DEFAULT CURRENT_DATE,
+        reference VARCHAR(255),
+        journal_id INTEGER REFERENCES journals(id) ON DELETE CASCADE
+      );
+    `);
+
+    await pool.query(`
+      CREATE TABLE journal_items (
+        id SERIAL PRIMARY KEY,
+        journal_entry_id INTEGER REFERENCES journal_entries(id) ON DELETE CASCADE,
+        account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+        debit NUMERIC(15, 2) DEFAULT 0,
+        credit NUMERIC(15, 2) DEFAULT 0
+      );
+    `);
+
     console.log("Seeding Indian Context Data...");
 
     const hash = await bcrypt.hash('admin123', 10);
     await pool.query(
-      `INSERT INTO users (email, name, password_hash, role) VALUES ($1, $2, $3, $4)`,
-      ['admin@example.com', 'Admin User', hash, 'admin']
+      `INSERT INTO users (email, name, password_hash, role) VALUES ($1, $2, $3, $4), ($5, $6, $7, $8)`,
+      ['admin@example.com', 'Admin User', hash, 'admin', 'accountant@yopmail.com', 'Accountant User', hash, 'accountant']
     );
 
     await pool.query(`
@@ -114,12 +134,12 @@ async function initDB() {
     `);
 
     await pool.query(`
-      INSERT INTO products (sku, name, category, type, sales_price, cost_price, stock_qty) VALUES 
-      ('FUR-001', 'Teak Wood Dining Table (6 Seater)', 'Tables', 'Goods', 35000, 22000, 15),
-      ('FUR-002', 'Ergonomic Office Chair', 'Chairs', 'Goods', 8500, 5000, 40),
-      ('FUR-003', 'Wooden Chair', 'Chairs', 'Goods', 4500, 2800, 120),
-      ('FUR-004', 'L-Shaped Fabric Sofa', 'Sofas', 'Goods', 45000, 28000, 10),
-      ('SRV-001', 'Interior Design Consultation', 'Services', 'Service', 5000, 0, 0);
+      INSERT INTO products (name, category, type, sales_price, cost_price, stock_qty) VALUES 
+      ('Teak Wood Dining Table (6 Seater)', 'Tables', 'Goods', 35000, 22000, 15),
+      ('Ergonomic Office Chair', 'Chairs', 'Goods', 8500, 5000, 40),
+      ('Wooden Chair', 'Chairs', 'Goods', 4500, 2800, 120),
+      ('L-Shaped Fabric Sofa', 'Sofas', 'Goods', 45000, 28000, 10),
+      ('Interior Design Consultation', 'Services', 'Service', 5000, 0, 0);
     `);
 
     const accRes = await pool.query(`
@@ -135,15 +155,50 @@ async function initDB() {
       RETURNING id, code;
     `);
 
-    // Map account codes to IDs for Journals
     const getAccId = (code) => accRes.rows.find(a => a.code === code)?.id;
 
-    await pool.query(`
+    const journalRes = await pool.query(`
       INSERT INTO journals (name, type, default_account_id) VALUES 
       ('Customer Invoices', 'Sales', $1),
       ('Vendor Bills', 'Purchase', $2),
-      ('Bank Operations', 'Bank', $3);
+      ('Bank Operations', 'Bank', $3)
+      RETURNING id, name;
     `, [getAccId('4000'), getAccId('5000'), getAccId('1000')]);
+
+    const getJournalId = (name) => journalRes.rows.find(j => j.name === name)?.id;
+    const salesJournalId = getJournalId('Customer Invoices');
+    const purchaseJournalId = getJournalId('Vendor Bills');
+    const bankJournalId = getJournalId('Bank Operations');
+    const bankAcc = getAccId('1000');
+    const debtorAcc = getAccId('1100');
+    const creditorAcc = getAccId('2000');
+    const salesAcc = getAccId('4000');
+    const purchaseAcc = getAccId('5000');
+
+    // Seed 10 Deals (Journal Entries)
+    for (let i = 1; i <= 5; i++) {
+        // Sales Invoices
+        const salesEntry = await pool.query(
+            'INSERT INTO journal_entries (date, reference, journal_id) VALUES ($1, $2, $3) RETURNING id',
+            [new Date(), `INV-2023-${100+i}`, salesJournalId]
+        );
+        const sEntryId = salesEntry.rows[0].id;
+        const amount = 45000 + (i*1000);
+        // Debit Debtor, Credit Sales
+        await pool.query('INSERT INTO journal_items (journal_entry_id, account_id, debit, credit) VALUES ($1, $2, $3, $4), ($1, $5, $6, $7)',
+            [sEntryId, debtorAcc, amount, 0, salesAcc, 0, amount]);
+
+        // Purchase Bills
+        const purchEntry = await pool.query(
+            'INSERT INTO journal_entries (date, reference, journal_id) VALUES ($1, $2, $3) RETURNING id',
+            [new Date(), `BILL-2023-${100+i}`, purchaseJournalId]
+        );
+        const pEntryId = purchEntry.rows[0].id;
+        const pAmount = 28000 + (i*1000);
+        // Debit Purchase, Credit Creditor
+        await pool.query('INSERT INTO journal_items (journal_entry_id, account_id, debit, credit) VALUES ($1, $2, $3, $4), ($1, $5, $6, $7)',
+            [pEntryId, purchaseAcc, pAmount, 0, creditorAcc, 0, pAmount]);
+    }
 
     console.log("Database perfectly seeded!");
 

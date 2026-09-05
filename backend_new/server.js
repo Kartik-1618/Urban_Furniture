@@ -80,10 +80,10 @@ app.get('/api/products', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/products', authenticateToken, async (req, res) => {
-  const { sku, name, category, type, sales_price, cost_price, stock_qty } = req.body;
+  const { name, category, type, sales_price, cost_price, stock_qty } = req.body;
   const { rows } = await db.query(
-    'INSERT INTO products (sku, name, category, type, sales_price, cost_price, stock_qty) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-    [sku, name, category, type, sales_price, cost_price, stock_qty]
+    'INSERT INTO products (name, category, type, sales_price, cost_price, stock_qty) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+    [name, category, type, sales_price, cost_price, stock_qty]
   );
   res.json(rows[0]);
 });
@@ -136,6 +136,35 @@ app.post('/api/journals', authenticateToken, async (req, res) => {
 app.delete('/api/journals/:id', authenticateToken, async (req, res) => {
   await db.query('DELETE FROM journals WHERE id = $1', [req.params.id]);
   res.json({ message: 'Deleted' });
+});
+
+// Users / Accountants
+app.get('/api/users', authenticateToken, async (req, res) => {
+  const { rows } = await db.query("SELECT id, name, email, role FROM users WHERE role = 'accountant'");
+  res.json(rows);
+});
+
+app.post('/api/users', authenticateToken, async (req, res) => {
+  const { name, email, password } = req.body;
+  const hash = await bcrypt.hash(password, 10);
+  const { rows } = await db.query(
+    "INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, 'accountant') RETURNING id, name, email, role",
+    [name, email, hash]
+  );
+  res.json(rows[0]);
+});
+
+// Transactions (Journal Entries)
+app.get('/api/transactions', authenticateToken, async (req, res) => {
+  const { rows } = await db.query(`
+    SELECT je.id, je.date, je.reference, j.name as journal_name,
+      (SELECT SUM(debit) FROM journal_items WHERE journal_entry_id = je.id) as total_debit,
+      (SELECT SUM(credit) FROM journal_items WHERE journal_entry_id = je.id) as total_credit
+    FROM journal_entries je
+    LEFT JOIN journals j ON je.journal_id = j.id
+    ORDER BY je.id DESC
+  `);
+  res.json(rows);
 });
 
 const PORT = process.env.PORT || 8001;
