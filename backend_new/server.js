@@ -35,10 +35,21 @@ app.post('/api/login', async (req, res) => {
     const validPassword = await bcrypt.compare(password, user.password_hash);
     if (!validPassword) return res.status(400).json({ error: 'Invalid password' });
 
-    const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, process.env.JWT_SECRET, { expiresIn: '24h' });
-    res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+    const token = jwt.sign({ id: user.id, email: user.email, role: user.role, must_change_password: user.must_change_password }, process.env.JWT_SECRET, { expiresIn: '24h' });
+    res.json({ token, user: { id: user.id, email: user.email, name: user.name, role: user.role, must_change_password: user.must_change_password } });
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/change-password', authenticateToken, async (req, res) => {
+  const { newPassword } = req.body;
+  try {
+    const hash = await bcrypt.hash(newPassword, 10);
+    await db.query('UPDATE users SET password_hash = $1, must_change_password = false WHERE id = $2', [hash, req.user.id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -60,12 +71,17 @@ app.get('/api/contacts', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/contacts', authenticateToken, async (req, res) => {
-  const { name, type, email, phone, city, state, pincode, profile_image } = req.body;
-  const { rows } = await db.query(
-    'INSERT INTO contacts (name, type, email, phone, city, state, pincode, profile_image) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
-    [name, type, email, phone, city, state, pincode, profile_image]
-  );
-  res.json(rows[0]);
+  try {
+    const { name, type, email, phone, city, state, pincode, profile_image } = req.body;
+    const { rows } = await db.query(
+      'INSERT INTO contacts (name, type, email, phone, city, state, pincode, profile_image) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+      [name, type, email, phone, city, state, pincode, profile_image]
+    );
+    res.json(rows[0]);
+  } catch (err) {
+    if (err.code === '23505') return res.status(400).json({ error: 'Email already registered' });
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.delete('/api/contacts/:id', authenticateToken, async (req, res) => {
@@ -95,15 +111,15 @@ app.delete('/api/products/:id', authenticateToken, async (req, res) => {
 
 // Accounts
 app.get('/api/accounts', authenticateToken, async (req, res) => {
-  const { rows } = await db.query('SELECT * FROM accounts ORDER BY code ASC');
+  const { rows } = await db.query('SELECT * FROM accounts ORDER BY id ASC');
   res.json(rows);
 });
 
 app.post('/api/accounts', authenticateToken, async (req, res) => {
-  const { code, name, type, balance } = req.body;
+  const { name, type, balance } = req.body;
   const { rows } = await db.query(
-    'INSERT INTO accounts (code, name, type, balance) VALUES ($1, $2, $3, $4) RETURNING *',
-    [code, name, type, balance]
+    'INSERT INTO accounts (name, type, balance) VALUES ($1, $2, $3) RETURNING *',
+    [name, type, balance]
   );
   res.json(rows[0]);
 });
@@ -145,13 +161,25 @@ app.get('/api/users', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/users', authenticateToken, async (req, res) => {
-  const { name, email, password } = req.body;
-  const hash = await bcrypt.hash(password, 10);
-  const { rows } = await db.query(
-    "INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, 'accountant') RETURNING id, name, email, role",
-    [name, email, hash]
-  );
-  res.json(rows[0]);
+  try {
+    const { name, email } = req.body;
+    const defaultPassword = 'welcome' + Math.floor(1000 + Math.random() * 9000);
+    const hash = await bcrypt.hash(defaultPassword, 10);
+    const { rows } = await db.query(
+      "INSERT INTO users (name, email, password_hash, role, must_change_password) VALUES ($1, $2, $3, 'accountant', true) RETURNING id, name, email, role",
+      [name, email, hash]
+    );
+    // Send password back so frontend can show it in popup
+    res.json({ ...rows[0], password: defaultPassword });
+  } catch (err) {
+    if (err.code === '23505') return res.status(400).json({ error: 'Email already registered' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/users/:id', authenticateToken, async (req, res) => {
+  await db.query('DELETE FROM users WHERE id = $1', [req.params.id]);
+  res.json({ message: 'Deleted' });
 });
 
 // Transactions (Journal Entries)

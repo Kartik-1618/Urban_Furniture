@@ -42,7 +42,8 @@ async function initDB() {
         email VARCHAR(255) UNIQUE NOT NULL,
         name VARCHAR(255) NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
-        role VARCHAR(50) DEFAULT 'user'
+        role VARCHAR(50) DEFAULT 'user',
+        must_change_password BOOLEAN DEFAULT false
       );
     `);
 
@@ -79,7 +80,6 @@ async function initDB() {
     await pool.query(`
       CREATE TABLE accounts (
         id SERIAL PRIMARY KEY,
-        code VARCHAR(50) UNIQUE NOT NULL,
         name VARCHAR(255) NOT NULL,
         type VARCHAR(50) NOT NULL,
         balance NUMERIC(15, 2) DEFAULT 0
@@ -119,15 +119,15 @@ async function initDB() {
 
     const hash = await bcrypt.hash('admin123', 10);
     await pool.query(
-      `INSERT INTO users (email, name, password_hash, role) VALUES ($1, $2, $3, $4), ($5, $6, $7, $8)`,
-      ['admin@example.com', 'Admin User', hash, 'admin', 'accountant@yopmail.com', 'Accountant User', hash, 'accountant']
+      `INSERT INTO users (email, name, password_hash, role, must_change_password) VALUES ($1, $2, $3, $4, false), ($5, $6, $7, $8, true)`,
+      ['jetha123@mail.com', 'JethaLal Gada', hash, 'admin', 'accountant@yopmail.com', 'Accountant User', hash, 'accountant']
     );
 
     await pool.query(`
       INSERT INTO contacts (name, type, email, phone, city, state, pincode) VALUES 
       ('Aarav Sharma', 'Customer', 'aarav@sharma.in', '+91 98765 43210', 'Mumbai', 'Maharashtra', '400001'),
       ('Kavita Nair', 'Customer', 'kavita@gmail.com', '+91 91234 56789', 'Bengaluru', 'Karnataka', '560001'),
-      ('Nimesh Pathak', 'Customer', 'nimesh.p@example.com', '+91 99887 76655', 'Ahmedabad', 'Gujarat', '380015'),
+      ('Nimesh Pathak', 'Customer', 'nimesh.p@example.com', '+91 99887 76655', 'Ahmedabad', 'Gujarat', '300015'),
       ('Century Plyboards India Ltd', 'Vendor', 'sales@centuryply.com', '+91 33 3940 3950', 'Kolkata', 'West Bengal', '700001'),
       ('Greenply Industries', 'Vendor', 'info@greenply.com', '+91 11 4279 1399', 'New Delhi', 'Delhi', '110001'),
       ('Azure Furniture', 'Vendor', 'contact@azure.in', '+91 88776 65544', 'Pune', 'Maharashtra', '411001');
@@ -135,27 +135,43 @@ async function initDB() {
 
     await pool.query(`
       INSERT INTO products (name, category, type, sales_price, cost_price, stock_qty) VALUES 
-      ('Teak Wood Dining Table (6 Seater)', 'Tables', 'Goods', 35000, 22000, 15),
       ('Ergonomic Office Chair', 'Chairs', 'Goods', 8500, 5000, 40),
       ('Wooden Chair', 'Chairs', 'Goods', 4500, 2800, 120),
       ('L-Shaped Fabric Sofa', 'Sofas', 'Goods', 45000, 28000, 10),
-      ('Interior Design Consultation', 'Services', 'Service', 5000, 0, 0);
+      ('3-Seater Leather Sofa', 'Sofas', 'Goods', 55000, 32000, 8),
+      ('Minimalist Coffee Table', 'Tables', 'Goods', 12000, 6000, 25),
+      ('Glass Dining Table', 'Tables', 'Goods', 25000, 15000, 15),
+      ('King Size Bed Frame', 'Beds', 'Goods', 35000, 20000, 12),
+      ('Queen Size Mattress', 'Beds', 'Goods', 18000, 10000, 30),
+      ('Bookshelf 5-Tier', 'Storage', 'Goods', 9500, 5000, 50),
+      ('Wooden Wardrobe', 'Storage', 'Goods', 28000, 16000, 20),
+      ('TV Unit Stand', 'Living', 'Goods', 15000, 8000, 18),
+      ('Nightstand Table', 'Bedroom', 'Goods', 4500, 2000, 60),
+      ('Executive Desk', 'Office', 'Goods', 22000, 12000, 15),
+      ('Mesh Desk Chair', 'Office', 'Goods', 6500, 3500, 45),
+      ('Round Dining Table', 'Tables', 'Goods', 18000, 10000, 22),
+      ('Velvet Accent Chair', 'Chairs', 'Goods', 12500, 7000, 30),
+      ('Wooden Bunk Bed', 'Beds', 'Goods', 42000, 25000, 5),
+      ('Shoe Rack', 'Storage', 'Goods', 3500, 1500, 80),
+      ('Console Table', 'Living', 'Goods', 11000, 5500, 25),
+      ('Interior Design Consultation', 'Services', 'Service', 5000, 0, 0),
+      ('Furniture Assembly Service', 'Services', 'Service', 1500, 0, 0)
     `);
 
     const accRes = await pool.query(`
-      INSERT INTO accounts (code, name, type, balance) VALUES 
-      ('1000', 'HDFC Bank Current A/c', 'Asset', 2500000),
-      ('1100', 'Accounts Receivable (Debtors)', 'Asset', 150000),
-      ('2000', 'Accounts Payable (Creditors)', 'Liability', 500000),
-      ('2100', 'CGST Payable', 'Liability', 0),
-      ('2101', 'SGST Payable', 'Liability', 0),
-      ('3000', 'Owner Capital', 'Capital', 5000000),
-      ('4000', 'Sales Income', 'Income', 0),
-      ('5000', 'Purchases Expense', 'Expense', 0)
-      RETURNING id, code;
+      INSERT INTO accounts (name, type, balance) VALUES 
+      ('HDFC Bank Current A/c', 'Asset', 2500000),
+      ('Accounts Receivable (Debtors)', 'Asset', 150000),
+      ('Accounts Payable (Creditors)', 'Liability', 500000),
+      ('CGST Payable', 'Liability', 0),
+      ('SGST Payable', 'Liability', 0),
+      ('Owner Capital', 'Capital', 5000000),
+      ('Sales Income', 'Income', 0),
+      ('Purchases Expense', 'Expense', 0)
+      RETURNING id, name;
     `);
 
-    const getAccId = (code) => accRes.rows.find(a => a.code === code)?.id;
+    const getAccId = (name) => accRes.rows.find(a => a.name === name)?.id;
 
     const journalRes = await pool.query(`
       INSERT INTO journals (name, type, default_account_id) VALUES 
@@ -163,17 +179,16 @@ async function initDB() {
       ('Vendor Bills', 'Purchase', $2),
       ('Bank Operations', 'Bank', $3)
       RETURNING id, name;
-    `, [getAccId('4000'), getAccId('5000'), getAccId('1000')]);
+    `, [getAccId('Sales Income'), getAccId('Purchases Expense'), getAccId('HDFC Bank Current A/c')]);
 
     const getJournalId = (name) => journalRes.rows.find(j => j.name === name)?.id;
     const salesJournalId = getJournalId('Customer Invoices');
     const purchaseJournalId = getJournalId('Vendor Bills');
     const bankJournalId = getJournalId('Bank Operations');
-    const bankAcc = getAccId('1000');
-    const debtorAcc = getAccId('1100');
-    const creditorAcc = getAccId('2000');
-    const salesAcc = getAccId('4000');
-    const purchaseAcc = getAccId('5000');
+    const debtorAcc = getAccId('Accounts Receivable (Debtors)');
+    const creditorAcc = getAccId('Accounts Payable (Creditors)');
+    const salesAcc = getAccId('Sales Income');
+    const purchaseAcc = getAccId('Purchases Expense');
 
     // Seed 10 Deals (Journal Entries)
     for (let i = 1; i <= 5; i++) {
