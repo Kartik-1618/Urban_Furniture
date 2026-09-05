@@ -43,6 +43,7 @@ async function initDB() {
         name VARCHAR(255) NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
         role VARCHAR(50) DEFAULT 'user',
+        department VARCHAR(100),
         must_change_password BOOLEAN DEFAULT false
       );
     `);
@@ -101,6 +102,7 @@ async function initDB() {
         id SERIAL PRIMARY KEY,
         date DATE DEFAULT CURRENT_DATE,
         reference VARCHAR(255),
+        status VARCHAR(50) DEFAULT 'Draft',
         journal_id INTEGER REFERENCES journals(id) ON DELETE CASCADE
       );
     `);
@@ -118,9 +120,14 @@ async function initDB() {
     console.log("Seeding Indian Context Data...");
 
     const hash = await bcrypt.hash('admin123', 10);
+    const accHash = await bcrypt.hash('welcome1234', 10);
     await pool.query(
-      `INSERT INTO users (email, name, password_hash, role, must_change_password) VALUES ($1, $2, $3, $4, false), ($5, $6, $7, $8, true)`,
-      ['jetha123@mail.com', 'JethaLal Gada', hash, 'admin', 'accountant@yopmail.com', 'Accountant User', hash, 'accountant']
+      `INSERT INTO users (email, name, password_hash, role, department, must_change_password) VALUES 
+      ('jetha123@mail.com', 'JethaLal Gada', $1, 'admin', 'Management', false),
+      ('sales.acc@mail.com', 'Sita Ram (Sales)', $2, 'accountant', 'Sales', true),
+      ('purchase.acc@mail.com', 'Hari Om (Purchase)', $2, 'accountant', 'Purchase', true),
+      ('accounts.acc@mail.com', 'Natuka Ka (Accounts)', $2, 'accountant', 'Accounts', true)`,
+      [hash, accHash]
     );
 
     await pool.query(`
@@ -128,9 +135,31 @@ async function initDB() {
       ('Aarav Sharma', 'Customer', 'aarav@sharma.in', '+91 98765 43210', 'Mumbai', 'Maharashtra', '400001'),
       ('Kavita Nair', 'Customer', 'kavita@gmail.com', '+91 91234 56789', 'Bengaluru', 'Karnataka', '560001'),
       ('Nimesh Pathak', 'Customer', 'nimesh.p@example.com', '+91 99887 76655', 'Ahmedabad', 'Gujarat', '300015'),
+      ('Rajeev Patel', 'Customer', 'rajeev.patel@mail.com', '+91 98765 11111', 'Surat', 'Gujarat', '395003'),
+      ('Suresh Menaria', 'Customer', 'suresh@m-corp.com', '+91 91234 22222', 'Pune', 'Maharashtra', '411005'),
+      ('Iyer Balasubramaniam', 'Customer', 'iyer@gokuldham.com', '+91 99887 33333', 'Mumbai', 'Maharashtra', '400063'),
+      ('Bhidiya Tukaram', 'Customer', 'bhide@tution.com', '+91 98765 44444', 'Mumbai', 'Maharashtra', '400063'),
+      ('Popatlal Pandey', 'Customer', 'popat@toofan.com', '+91 91234 55555', 'Mumbai', 'Maharashtra', '400063'),
+      ('Babita Iyer', 'Customer', 'babita@model.com', '+91 99887 66666', 'Mumbai', 'Maharashtra', '400063'),
+      ('Abdul', 'Customer', 'abdul@soda.com', '+91 98765 77777', 'Mumbai', 'Maharashtra', '400063'),
+      ('Sodhi', 'Customer', 'sodhi@garage.com', '+91 91234 88888', 'Mumbai', 'Maharashtra', '400063'),
+      ('Dr. Hathi', 'Customer', 'hathi@hospital.com', '+91 99887 99999', 'Mumbai', 'Maharashtra', '400063'),
+      ('Taarak Mehta', 'Customer', 'taarak@writer.com', '+91 98765 00000', 'Mumbai', 'Maharashtra', '400063'),
+      ('Daya Gada', 'Customer', 'daya@home.com', '+91 91234 10101', 'Mumbai', 'Maharashtra', '400063'),
+      ('Rita Reporter', 'Customer', 'rita@news.com', '+91 99887 20202', 'Mumbai', 'Maharashtra', '400063'),
+      ('Sundar Lal', 'Customer', 'sundar@taxi.com', '+91 98765 30303', 'Ahmedabad', 'Gujarat', '380001'),
+      ('Anjali Mehta', 'Customer', 'anjali@diet.com', '+91 91234 40404', 'Mumbai', 'Maharashtra', '400063'),
       ('Century Plyboards India Ltd', 'Vendor', 'sales@centuryply.com', '+91 33 3940 3950', 'Kolkata', 'West Bengal', '700001'),
       ('Greenply Industries', 'Vendor', 'info@greenply.com', '+91 11 4279 1399', 'New Delhi', 'Delhi', '110001'),
-      ('Azure Furniture', 'Vendor', 'contact@azure.in', '+91 88776 65544', 'Pune', 'Maharashtra', '411001');
+      ('Azure Furniture', 'Vendor', 'contact@azure.in', '+91 88776 65544', 'Pune', 'Maharashtra', '411001'),
+      ('Durian Industries', 'Vendor', 'sales@durian.in', '+91 22 2222 3333', 'Mumbai', 'Maharashtra', '400005'),
+      ('Godrej Interio', 'Vendor', 'interio@godrej.com', '+91 22 3333 4444', 'Mumbai', 'Maharashtra', '400079'),
+      ('Nilkamal Ltd', 'Vendor', 'b2b@nilkamal.com', '+91 22 4444 5555', 'Mumbai', 'Maharashtra', '400093'),
+      ('Zuari Furniture', 'Vendor', 'info@zuari.com', '+91 80 5555 6666', 'Bengaluru', 'Karnataka', '560002'),
+      ('Damro India', 'Vendor', 'sales@damro.in', '+91 44 6666 7777', 'Chennai', 'Tamil Nadu', '600001'),
+      ('Pepperfry B2B', 'Vendor', 'b2b@pepperfry.com', '+91 22 7777 8888', 'Mumbai', 'Maharashtra', '400083'),
+      ('Urban Ladder Corp', 'Vendor', 'corp@urbanladder.com', '+91 80 8888 9999', 'Bengaluru', 'Karnataka', '560003'),
+      ('IKEA India Supply', 'Vendor', 'supply@ikea.in', '+91 22 9999 0000', 'Navi Mumbai', 'Maharashtra', '400705');
     `);
 
     await pool.query(`
@@ -154,6 +183,17 @@ async function initDB() {
       ('Wooden Bunk Bed', 'Beds', 'Goods', 42000, 25000, 5),
       ('Shoe Rack', 'Storage', 'Goods', 3500, 1500, 80),
       ('Console Table', 'Living', 'Goods', 11000, 5500, 25),
+      ('Recliner Sofa 1-Seater', 'Sofas', 'Goods', 22000, 12000, 15),
+      ('Study Table with Drawer', 'Office', 'Goods', 8500, 4500, 35),
+      ('Plastic Stackable Chair', 'Chairs', 'Goods', 900, 500, 200),
+      ('Bar Stool High', 'Chairs', 'Goods', 3500, 1800, 40),
+      ('Outdoor Patio Set', 'Living', 'Goods', 32000, 18000, 8),
+      ('Bean Bag (Large)', 'Living', 'Goods', 2500, 1200, 50),
+      ('Teak Wood Jhula (Swing)', 'Living', 'Goods', 45000, 25000, 3),
+      ('Dressing Table with Mirror', 'Bedroom', 'Goods', 14000, 7500, 12),
+      ('Modular Kitchen Cabinet', 'Storage', 'Goods', 55000, 30000, 5),
+      ('Kids Bunk Bed', 'Beds', 'Goods', 28000, 15000, 6),
+      ('Foldable Dining Table', 'Tables', 'Goods', 16000, 9000, 15),
       ('Interior Design Consultation', 'Services', 'Service', 5000, 0, 0),
       ('Furniture Assembly Service', 'Services', 'Service', 1500, 0, 0)
     `);
@@ -190,12 +230,13 @@ async function initDB() {
     const salesAcc = getAccId('Sales Income');
     const purchaseAcc = getAccId('Purchases Expense');
 
-    // Seed 10 Deals (Journal Entries)
-    for (let i = 1; i <= 5; i++) {
+    // Seed 30 Deals (Journal Entries)
+    for (let i = 1; i <= 15; i++) {
         // Sales Invoices
+        const status = i % 3 === 0 ? 'Draft' : 'Confirmed';
         const salesEntry = await pool.query(
-            'INSERT INTO journal_entries (date, reference, journal_id) VALUES ($1, $2, $3) RETURNING id',
-            [new Date(), `INV-2023-${100+i}`, salesJournalId]
+            'INSERT INTO journal_entries (date, reference, status, journal_id) VALUES ($1, $2, $3, $4) RETURNING id',
+            [new Date(), `INV-2023-${100+i}`, status, salesJournalId]
         );
         const sEntryId = salesEntry.rows[0].id;
         const amount = 45000 + (i*1000);
@@ -204,9 +245,10 @@ async function initDB() {
             [sEntryId, debtorAcc, amount, 0, salesAcc, 0, amount]);
 
         // Purchase Bills
+        const pStatus = i % 4 === 0 ? 'Draft' : 'Confirmed';
         const purchEntry = await pool.query(
-            'INSERT INTO journal_entries (date, reference, journal_id) VALUES ($1, $2, $3) RETURNING id',
-            [new Date(), `BILL-2023-${100+i}`, purchaseJournalId]
+            'INSERT INTO journal_entries (date, reference, status, journal_id) VALUES ($1, $2, $3, $4) RETURNING id',
+            [new Date(), `BILL-2023-${100+i}`, pStatus, purchaseJournalId]
         );
         const pEntryId = purchEntry.rows[0].id;
         const pAmount = 28000 + (i*1000);
