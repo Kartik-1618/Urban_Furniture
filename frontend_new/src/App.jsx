@@ -110,19 +110,51 @@ function Dashboard() {
 }
 
 // --- Data Pages (Simplified) ---
-function GenericDataPage({ title, endpoint, columns, itemKey = 'id' }) {
+function GenericDataPage({ title, endpoint, columns, formFields, itemKey = 'id' }) {
   const [data, setData] = React.useState([]);
+  const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const [formData, setFormData] = React.useState({});
 
-  React.useEffect(() => {
+  const fetchData = React.useCallback(() => {
     api.get(endpoint).then(res => setData(res.data)).catch(console.error);
   }, [endpoint]);
+
+  React.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post(endpoint, formData);
+      setIsModalOpen(false);
+      setFormData({});
+      fetchData();
+    } catch (err) {
+      alert("Error saving data: " + (err.response?.data?.error || err.message));
+    }
+  };
 
   return (
     <div>
       <div className="flex justify-between items-start mb-6">
         <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
+        {formFields && (
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="bg-[#003B95] text-white px-4 py-2 rounded-md hover:bg-[#003B95]/90"
+          >
+            Add New
+          </button>
+        )}
       </div>
-      <div className="bg-white shadow rounded-lg border overflow-hidden">
+      
+      <div className="bg-white shadow rounded-lg border overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -143,6 +175,49 @@ function GenericDataPage({ title, endpoint, columns, itemKey = 'id' }) {
           </tbody>
         </table>
       </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="text-lg font-semibold">Add {title}</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-black">&times;</button>
+            </div>
+            <form onSubmit={handleSubmit} className="p-4 space-y-4">
+              {formFields.map(field => (
+                <div key={field.name}>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{field.label}</label>
+                  {field.type === 'select' ? (
+                    <select 
+                      name={field.name} 
+                      required={field.required}
+                      value={formData[field.name] || ''}
+                      onChange={handleInputChange}
+                      className="w-full border rounded-md p-2 focus:ring-[#003B95] focus:border-[#003B95]"
+                    >
+                      <option value="">Select...</option>
+                      {field.options.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                    </select>
+                  ) : (
+                    <input 
+                      type={field.type || 'text'} 
+                      name={field.name} 
+                      required={field.required}
+                      value={formData[field.name] || ''}
+                      onChange={handleInputChange}
+                      className="w-full border rounded-md p-2 focus:ring-[#003B95] focus:border-[#003B95]"
+                    />
+                  )}
+                </div>
+              ))}
+              <div className="pt-4 flex justify-end gap-2 border-t mt-4">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 border rounded-md text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button type="submit" className="px-4 py-2 bg-[#003B95] text-white rounded-md hover:bg-[#003B95]/90">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -157,19 +232,76 @@ function App() {
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         
         <Route path="/contacts" element={<ProtectedRoute>
-          <GenericDataPage title="Contacts" endpoint="/contacts" columns={[{key: 'name', label: 'Name'}, {key: 'type', label: 'Type'}, {key: 'email', label: 'Email'}]} />
+          <GenericDataPage 
+            title="Contacts" 
+            endpoint="/contacts" 
+            columns={[
+              {key: 'name', label: 'Name'}, {key: 'type', label: 'Type'}, {key: 'email', label: 'Email'}, {key: 'phone', label: 'Mobile'}, {key: 'city', label: 'City'}
+            ]} 
+            formFields={[
+              {name: 'name', label: 'Name', required: true},
+              {name: 'type', label: 'Type', type: 'select', required: true, options: [{value: 'Customer', label: 'Customer'}, {value: 'Vendor', label: 'Vendor'}, {value: 'Both', label: 'Both'}]},
+              {name: 'email', label: 'Email', type: 'email'},
+              {name: 'phone', label: 'Mobile'},
+              {name: 'city', label: 'City'},
+              {name: 'state', label: 'State'},
+              {name: 'pincode', label: 'Pincode'},
+              {name: 'profile_image', label: 'Profile Image URL'}
+            ]}
+          />
         </ProtectedRoute>} />
         
         <Route path="/products" element={<ProtectedRoute>
-          <GenericDataPage title="Products" endpoint="/products" columns={[{key: 'sku', label: 'SKU'}, {key: 'name', label: 'Name'}, {key: 'type', label: 'Type'}, {key: 'sales_price', label: 'Sales Price'}]} />
+          <GenericDataPage 
+            title="Products" 
+            endpoint="/products" 
+            columns={[
+              {key: 'sku', label: 'SKU'}, {key: 'name', label: 'Product Name'}, {key: 'type', label: 'Type'}, {key: 'category', label: 'Category'}, {key: 'sales_price', label: 'Sales Price'}
+            ]} 
+            formFields={[
+              {name: 'sku', label: 'SKU', required: true},
+              {name: 'name', label: 'Product Name', required: true},
+              {name: 'type', label: 'Type', type: 'select', required: true, options: [{value: 'Goods', label: 'Goods'}, {value: 'Service', label: 'Service'}, {value: 'Combo', label: 'Combo'}]},
+              {name: 'category', label: 'Category', required: true},
+              {name: 'sales_price', label: 'Sales Price', type: 'number', required: true},
+              {name: 'cost_price', label: 'Cost Price', type: 'number', required: true}
+            ]}
+          />
         </ProtectedRoute>} />
         
         <Route path="/accounts" element={<ProtectedRoute>
-          <GenericDataPage title="Chart of Accounts" endpoint="/accounts" columns={[{key: 'code', label: 'Code'}, {key: 'name', label: 'Name'}, {key: 'type', label: 'Type'}, {key: 'balance', label: 'Balance'}]} />
+          <GenericDataPage 
+            title="Chart of Accounts" 
+            endpoint="/accounts" 
+            columns={[
+              {key: 'code', label: 'Code'}, {key: 'name', label: 'Account Name'}, {key: 'type', label: 'Type'}, {key: 'balance', label: 'Balance'}
+            ]} 
+            formFields={[
+              {name: 'code', label: 'Code', required: true},
+              {name: 'name', label: 'Account Name', required: true},
+              {name: 'type', label: 'Type', type: 'select', required: true, options: [
+                {value: 'Asset', label: 'Asset'}, {value: 'Liability', label: 'Liability'}, {value: 'Expense', label: 'Expense'}, {value: 'Income', label: 'Income'}, {value: 'Capital', label: 'Capital'}
+              ]},
+              {name: 'balance', label: 'Opening Balance', type: 'number', required: true}
+            ]}
+          />
         </ProtectedRoute>} />
 
         <Route path="/journals" element={<ProtectedRoute>
-          <GenericDataPage title="Journals" endpoint="/journals" columns={[{key: 'name', label: 'Name'}, {key: 'type', label: 'Type'}]} />
+          <GenericDataPage 
+            title="Journals" 
+            endpoint="/journals" 
+            columns={[
+              {key: 'name', label: 'Journal Name'}, {key: 'type', label: 'Type'}, {key: 'default_account_name', label: 'Default Account'}
+            ]} 
+            formFields={[
+              {name: 'name', label: 'Journal Name', required: true},
+              {name: 'type', label: 'Type', type: 'select', required: true, options: [
+                {value: 'Sales', label: 'Sales'}, {value: 'Purchase', label: 'Purchase'}, {value: 'Cash', label: 'Cash'}, {value: 'Bank', label: 'Bank'}
+              ]},
+              {name: 'default_account_id', label: 'Default Account ID (Optional)', type: 'number'}
+            ]}
+          />
         </ProtectedRoute>} />
       </Routes>
     </Router>

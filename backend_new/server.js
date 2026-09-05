@@ -60,10 +60,10 @@ app.get('/api/contacts', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/contacts', authenticateToken, async (req, res) => {
-  const { name, type, email, phone } = req.body;
+  const { name, type, email, phone, city, state, pincode, profile_image } = req.body;
   const { rows } = await db.query(
-    'INSERT INTO contacts (name, type, email, phone) VALUES ($1, $2, $3, $4) RETURNING *',
-    [name, type, email, phone]
+    'INSERT INTO contacts (name, type, email, phone, city, state, pincode, profile_image) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+    [name, type, email, phone, city, state, pincode, profile_image]
   );
   res.json(rows[0]);
 });
@@ -80,10 +80,10 @@ app.get('/api/products', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/products', authenticateToken, async (req, res) => {
-  const { sku, name, type, sales_price, cost_price, stock_qty } = req.body;
+  const { sku, name, category, type, sales_price, cost_price, stock_qty } = req.body;
   const { rows } = await db.query(
-    'INSERT INTO products (sku, name, type, sales_price, cost_price, stock_qty) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-    [sku, name, type, sales_price, cost_price, stock_qty]
+    'INSERT INTO products (sku, name, category, type, sales_price, cost_price, stock_qty) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+    [sku, name, category, type, sales_price, cost_price, stock_qty]
   );
   res.json(rows[0]);
 });
@@ -115,8 +115,27 @@ app.delete('/api/accounts/:id', authenticateToken, async (req, res) => {
 
 // Journals
 app.get('/api/journals', authenticateToken, async (req, res) => {
-  const { rows } = await db.query('SELECT * FROM journals ORDER BY id ASC');
+  const { rows } = await db.query(`
+    SELECT j.*, a.name as default_account_name 
+    FROM journals j 
+    LEFT JOIN accounts a ON j.default_account_id = a.id 
+    ORDER BY j.id ASC
+  `);
   res.json(rows);
+});
+
+app.post('/api/journals', authenticateToken, async (req, res) => {
+  const { name, type, default_account_id } = req.body;
+  const { rows } = await db.query(
+    'INSERT INTO journals (name, type, default_account_id) VALUES ($1, $2, $3) RETURNING *',
+    [name, type, default_account_id]
+  );
+  res.json(rows[0]);
+});
+
+app.delete('/api/journals/:id', authenticateToken, async (req, res) => {
+  await db.query('DELETE FROM journals WHERE id = $1', [req.params.id]);
+  res.json({ message: 'Deleted' });
 });
 
 const PORT = process.env.PORT || 8001;

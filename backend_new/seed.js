@@ -3,7 +3,6 @@ const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
 async function initDB() {
-  // 1. Connect to default postgres to create the new database
   const rootPool = new Pool({
     user: process.env.DB_USER,
     host: process.env.DB_HOST,
@@ -13,14 +12,9 @@ async function initDB() {
   });
 
   try {
-    console.log("Checking if database exists...");
     const res = await rootPool.query(`SELECT 1 FROM pg_database WHERE datname='${process.env.DB_NAME}'`);
     if (res.rowCount === 0) {
-      console.log(`Creating database ${process.env.DB_NAME}...`);
       await rootPool.query(`CREATE DATABASE ${process.env.DB_NAME}`);
-      console.log("Database created.");
-    } else {
-      console.log("Database already exists.");
     }
   } catch (err) {
     console.error("Error creating database:", err);
@@ -28,7 +22,6 @@ async function initDB() {
     await rootPool.end();
   }
 
-  // 2. Connect to the newly created database to create tables and seed data
   const pool = new Pool({
     user: process.env.DB_USER,
     host: process.env.DB_HOST,
@@ -38,10 +31,13 @@ async function initDB() {
   });
 
   try {
-    console.log("Creating tables...");
+    console.log("Dropping existing tables...");
+    await pool.query(`DROP TABLE IF EXISTS journals, accounts, products, contacts, users CASCADE;`);
+
+    console.log("Creating tables with new schema...");
     
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
+      CREATE TABLE users (
         id SERIAL PRIMARY KEY,
         email VARCHAR(255) UNIQUE NOT NULL,
         name VARCHAR(255) NOT NULL,
@@ -50,21 +46,28 @@ async function initDB() {
       );
     `);
 
+    // Added city, state, pincode, profile_image
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS contacts (
+      CREATE TABLE contacts (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         type VARCHAR(50) NOT NULL,
         email VARCHAR(255),
-        phone VARCHAR(100)
+        phone VARCHAR(100),
+        city VARCHAR(100),
+        state VARCHAR(100),
+        pincode VARCHAR(20),
+        profile_image VARCHAR(255)
       );
     `);
 
+    // Added category
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS products (
+      CREATE TABLE products (
         id SERIAL PRIMARY KEY,
         sku VARCHAR(100) UNIQUE,
         name VARCHAR(255) NOT NULL,
+        category VARCHAR(100),
         type VARCHAR(50) NOT NULL,
         sales_price NUMERIC(10, 2) DEFAULT 0,
         cost_price NUMERIC(10, 2) DEFAULT 0,
@@ -73,7 +76,7 @@ async function initDB() {
     `);
 
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS accounts (
+      CREATE TABLE accounts (
         id SERIAL PRIMARY KEY,
         code VARCHAR(50) UNIQUE NOT NULL,
         name VARCHAR(255) NOT NULL,
@@ -82,80 +85,67 @@ async function initDB() {
       );
     `);
     
+    // Added default_account_id
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS journals (
+      CREATE TABLE journals (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
-        type VARCHAR(50) NOT NULL
+        type VARCHAR(50) NOT NULL,
+        default_account_id INTEGER REFERENCES accounts(id)
       );
     `);
 
-    console.log("Tables created successfully.");
+    console.log("Seeding Indian Context Data...");
 
-    console.log("Seeding data...");
+    const hash = await bcrypt.hash('admin123', 10);
+    await pool.query(
+      `INSERT INTO users (email, name, password_hash, role) VALUES ($1, $2, $3, $4)`,
+      ['admin@example.com', 'Admin User', hash, 'admin']
+    );
 
-    // Seed Admin
-    const adminCheck = await pool.query(`SELECT 1 FROM users WHERE email='admin@example.com'`);
-    if (adminCheck.rowCount === 0) {
-      const hash = await bcrypt.hash('admin123', 10);
-      await pool.query(
-        `INSERT INTO users (email, name, password_hash, role) VALUES ($1, $2, $3, $4)`,
-        ['admin@example.com', 'Admin User', hash, 'admin']
-      );
-    }
+    await pool.query(`
+      INSERT INTO contacts (name, type, email, phone, city, state, pincode) VALUES 
+      ('Aarav Sharma', 'Customer', 'aarav@sharma.in', '+91 98765 43210', 'Mumbai', 'Maharashtra', '400001'),
+      ('Kavita Nair', 'Customer', 'kavita@gmail.com', '+91 91234 56789', 'Bengaluru', 'Karnataka', '560001'),
+      ('Nimesh Pathak', 'Customer', 'nimesh.p@example.com', '+91 99887 76655', 'Ahmedabad', 'Gujarat', '380015'),
+      ('Century Plyboards India Ltd', 'Vendor', 'sales@centuryply.com', '+91 33 3940 3950', 'Kolkata', 'West Bengal', '700001'),
+      ('Greenply Industries', 'Vendor', 'info@greenply.com', '+91 11 4279 1399', 'New Delhi', 'Delhi', '110001'),
+      ('Azure Furniture', 'Vendor', 'contact@azure.in', '+91 88776 65544', 'Pune', 'Maharashtra', '411001');
+    `);
 
-    // Seed Contacts
-    const contactCheck = await pool.query(`SELECT 1 FROM contacts LIMIT 1`);
-    if (contactCheck.rowCount === 0) {
-      await pool.query(`
-        INSERT INTO contacts (name, type, email, phone) VALUES 
-        ('Aarav Sharma', 'customer', 'aarav@sharma.in', '+91 98765 43210'),
-        ('Kavita Nair', 'customer', 'kavita@gmail.com', '+91 91234 56789'),
-        ('Century Plyboards India Ltd', 'vendor', 'sales@centuryply.com', '+91 33 3940 3950'),
-        ('Greenply Industries', 'vendor', 'info@greenply.com', '+91 11 4279 1399');
-      `);
-    }
+    await pool.query(`
+      INSERT INTO products (sku, name, category, type, sales_price, cost_price, stock_qty) VALUES 
+      ('FUR-001', 'Teak Wood Dining Table (6 Seater)', 'Tables', 'Goods', 35000, 22000, 15),
+      ('FUR-002', 'Ergonomic Office Chair', 'Chairs', 'Goods', 8500, 5000, 40),
+      ('FUR-003', 'Wooden Chair', 'Chairs', 'Goods', 4500, 2800, 120),
+      ('FUR-004', 'L-Shaped Fabric Sofa', 'Sofas', 'Goods', 45000, 28000, 10),
+      ('SRV-001', 'Interior Design Consultation', 'Services', 'Service', 5000, 0, 0);
+    `);
 
-    // Seed Products
-    const prodCheck = await pool.query(`SELECT 1 FROM products LIMIT 1`);
-    if (prodCheck.rowCount === 0) {
-      await pool.query(`
-        INSERT INTO products (sku, name, type, sales_price, cost_price, stock_qty) VALUES 
-        ('FUR-001', 'Teak Wood Dining Table (6 Seater)', 'goods', 35000, 22000, 15),
-        ('FUR-002', 'Ergonomic Office Chair', 'goods', 8500, 5000, 40),
-        ('SRV-001', 'Interior Design Consultation', 'service', 5000, 0, 0);
-      `);
-    }
+    const accRes = await pool.query(`
+      INSERT INTO accounts (code, name, type, balance) VALUES 
+      ('1000', 'HDFC Bank Current A/c', 'Asset', 2500000),
+      ('1100', 'Accounts Receivable (Debtors)', 'Asset', 150000),
+      ('2000', 'Accounts Payable (Creditors)', 'Liability', 500000),
+      ('2100', 'CGST Payable', 'Liability', 0),
+      ('2101', 'SGST Payable', 'Liability', 0),
+      ('3000', 'Owner Capital', 'Capital', 5000000),
+      ('4000', 'Sales Income', 'Income', 0),
+      ('5000', 'Purchases Expense', 'Expense', 0)
+      RETURNING id, code;
+    `);
 
-    // Seed Accounts
-    const accCheck = await pool.query(`SELECT 1 FROM accounts LIMIT 1`);
-    if (accCheck.rowCount === 0) {
-      await pool.query(`
-        INSERT INTO accounts (code, name, type, balance) VALUES 
-        ('1000', 'HDFC Bank Current A/c', 'asset', 2500000),
-        ('1100', 'Accounts Receivable', 'asset', 150000),
-        ('2000', 'Accounts Payable', 'liability', 500000),
-        ('2100', 'CGST Payable', 'liability', 0),
-        ('2101', 'SGST Payable', 'liability', 0),
-        ('3000', 'Owner Capital', 'capital', 5000000),
-        ('4000', 'Sales - Furniture', 'income', 0),
-        ('5000', 'Purchases - Raw Materials', 'expense', 0);
-      `);
-    }
+    // Map account codes to IDs for Journals
+    const getAccId = (code) => accRes.rows.find(a => a.code === code)?.id;
 
-    // Seed Journals
-    const journalCheck = await pool.query(`SELECT 1 FROM journals LIMIT 1`);
-    if (journalCheck.rowCount === 0) {
-      await pool.query(`
-        INSERT INTO journals (name, type) VALUES 
-        ('Customer Invoices', 'sale'),
-        ('Vendor Bills', 'purchase'),
-        ('Bank Operations', 'bank'),
-        ('Cash Operations', 'cash');
-      `);
-    }
+    await pool.query(`
+      INSERT INTO journals (name, type, default_account_id) VALUES 
+      ('Customer Invoices', 'Sales', $1),
+      ('Vendor Bills', 'Purchase', $2),
+      ('Bank Operations', 'Bank', $3);
+    `, [getAccId('4000'), getAccId('5000'), getAccId('1000')]);
 
-    console.log("Seeding complete!");
+    console.log("Database perfectly seeded!");
 
   } catch (err) {
     console.error("Error setting up DB:", err);
